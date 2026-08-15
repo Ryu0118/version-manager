@@ -6,6 +6,7 @@ excluded:
   - .swiftpm
   - "**/.build/**"
   - "**/.swiftpm/**"
+  - Sources/VersionManagerKit/Generated
 
 included:
   - Sources
