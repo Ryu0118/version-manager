@@ -35,12 +35,36 @@ accidental matches elsewhere in the file.
   exact match count. Use an integer whenever you know exactly how many times a version
   string should appear — it turns "someone deleted a line" into a hard error.
 - `renames[]`: rename files whose *name* encodes the version (e.g. `Configs/1-17-2.xcconfig`).
-  `transform.run` is a shell one-liner reading `$APPVERSION_VALUE` and writing exactly
-  one line to stdout — this is a pure string transform, it must not have side effects.
-- `hooks.pre` / `hooks.post`: shell commands run before/after the bump. `pre` failures
+  Each rule requires `id` (unique identifier), `directory` (folder to rename files in),
+  and `format` (filename pattern with the `{version}` placeholder — this is mandatory).
+  `transform` is optional: a shell one-liner reading `$APPVERSION_VALUE` and writing
+  exactly one line to stdout. Without `transform`, the version is used verbatim. Example:
+
+  ```yaml
+  renames:
+    - id: version-xcconfig
+      directory: Configs
+      format: "{version}.xcconfig"
+      transform:
+        run: "echo \"$APPVERSION_VALUE\" | tr '.' '-'"
+  ```
+
+- `hooks.pre` / `hooks.post`: arrays of named shell commands run before/after the bump.
+  Each hook is an object with `name` (for logging) and `run` (the command). `pre` failures
   abort the whole bump before any file is touched; `post` failures are reported but do
   not roll back already-written changes (hooks may be non-idempotent external actions).
   Both receive `APPVERSION_OLD`, `APPVERSION_NEW`, `APPVERSION_CONFIG_DIR` as env vars.
+  Example:
+
+  ```yaml
+  hooks:
+    pre:
+      - name: ensure-clean-worktree
+        run: "git diff --quiet"
+    post:
+      - name: update-changelog
+        run: "./scripts/insert-changelog-entry.sh"
+  ```
 
 version-manager is semver-only — there is no support for custom/non-semver version
 schemes (e.g. bare integer build numbers).
