@@ -3735,6 +3735,234 @@ EOF
 
 ---
 
+### Task 11.5: REWORK — `.appversion.yml` schema change (version becomes the source of truth, semver-only)
+
+**Context — read this before anything else.** After Tasks 1-11 were implemented and reviewed clean
+against the original DESIGN.md schema, the user requested a mid-execution requirement change (ruling
+recorded in the SDD ledger, 2026-08-16): `.appversion.yml`'s `version:` field changes from a nested
+object (`format`/`pattern`/`strict`) to a **plain string scalar holding the actual current version**
+(e.g. `version: "1.17.2"`). This string becomes the single source of truth for `current`/`check` —
+they read it directly, never regex-extracting from a file. `source_of_truth` (which pointed at a
+`files[].id` rule) is removed entirely. Custom `format: pattern` support is dropped — **semver only**
+from now on (Task 14 above is void because of this). The `strict: Bool?` flag (pre-release/build-
+metadata allow/reject, default `true`) survives as a **top-level** field alongside `version`.
+
+DESIGN.md has already been updated to reflect this (read it fresh — §1.2 `current`, §2.1/2.2/2.3/2.4
+schema+samples+Codable sketch, §4.1 flow note on config-self-replacement, §4.2 error enum+validation
+list, §4.4 PlanValidator, §4.7 VersionFormatValidator, §7.2 test list, §8 roadmap). This task's job is
+to bring the ALREADY-IMPLEMENTED code (Tasks 2, 3, 5, 6, 7, 9, 10, 11) in line with the new schema.
+This is a single large rework task, not split across the original per-feature task boundaries, because
+the change is a single coherent schema edit that touches many files mechanically plus a few files
+substantively — splitting it would create false dependency edges between fragments of one edit.
+
+**The single most important design point, easy to get wrong:** `bump` must write the new version into
+`.appversion.yml` itself as PART of the plan-then-apply pipeline — using the SAME `FileReplacementPlan`
+/ reverse-order-replacement machinery already built and tested in Task 6, treating the config file as
+just another regex-matched file with pattern `version: "(\d+\.\d+\.\d+)"` (capture group only, quotes
+outside the group). **Do NOT decode-then-re-encode the YAML with `YAMLEncoder`** to change `version:` —
+Yams's encoder does not round-trip comments, and this would silently delete every comment the user
+wrote in `.appversion.yml`. If `.appversion.yml` needs to be treated as an implicit `files[]`-like rule
+inside `BumpPlanner`/`ConfigLoader`, add it as a synthesized rule (not user-visible in `config.files`,
+but flows through the exact same `FileReplacementPlan` construction, validation, and atomic-write path
+as every other file) rather than special-casing config writes as a separate code path.
+
+**Files to modify (from a dedicated impact-survey Explore agent, verified against actual source):**
+
+*Production — non-trivial rework, not mechanical:*
+- `Sources/VersionManagerKit/Config/Config.swift` — delete the nested `VersionFormat` struct and its
+  `Format` enum entirely. `Config.version` becomes `package var version: String`. Add
+  `package var strict: Bool?` as a new top-level field. Delete `package var sourceOfTruth: String?` and
+  its `CodingKeys` entry (`case sourceOfTruth = "source_of_truth"`).
+- `Sources/VersionManagerKit/Config/ConfigValidator.swift` — remove the
+  `errors += validateSourceOfTruth(config.sourceOfTruth, files: config.files)` call and the
+  `if config.version.format == .pattern, ...` block (added in the now-void Task 14 — if Task 14 was
+  never actually implemented in your repo state, there's nothing to remove here; check). Remove
+  `case unknownSourceOfTruth(id: String)` and `case patternRequiredForCustomFormat` from
+  `ConfigValidatorError`, plus their `errorDescription` switch arms. **Add** a new validation step:
+  `config.version` must parse as a valid `SemanticVersion` (respecting `config.strict`) — add a new
+  `ConfigValidatorError` case, e.g. `case invalidVersionField(underlying: String)`, populated by
+  attempting `SemanticVersion(parsing: config.version)` and checking `strict` the same way
+  `VersionFormatValidator` used to (see below — you're likely moving this exact logic, not
+  reinventing it).
+- `Sources/VersionManagerKit/Config/ConfigValidator+HooksValidator.swift` — **delete this file
+  entirely**. Despite its name (from the original DESIGN.md naming table), its only content is
+  `validateSourceOfTruth(_:files:)` — verified by direct inspection, there is no real hook-structure
+  validation logic hiding in it. If you find real hook validation here in your actual repo state that
+  the survey missed, keep that part and only remove the source-of-truth function.
+- `Sources/VersionManagerKit/Versioning/VersionFormatValidator.swift` — delete the `.pattern` branch
+  and `validatePattern`/`patternMismatch` case entirely (semver-only now). Change the signature from
+  `validate(_ versionString: String, against format: Config.VersionFormat) throws` to something like
+  `validate(_ versionString: String, strict: Bool) throws` (taking the new top-level `strict` flag
+  directly, not a `Config.VersionFormat` object that no longer exists). Keep the `strict` semantics
+  identical to before (strict=true rejects any pre-release/build-metadata suffix).
+- `Sources/VersionManagerKit/Runners/CurrentRunner.swift` — **full rewrite, highest-impact file in
+  this task.** Delete the entire "resolve `config.sourceOfTruth ?? config.files.first?.id`, glob-
+  expand, read file, regex-extract" logic. The new implementation is: load config, validate it, return
+  `config.version` directly. `CurrentRunnerError`'s cases (`noRulesConfigured`, `sourceFileNotFound`,
+  `noMatchFound`) are all obsolete — there's no file resolution left to fail. Decide whether
+  `CurrentRunner` still needs its `fileManager`/`processRunner` init parameters at all (it likely
+  still needs `fileManager` to load the config via `ConfigLoader`, but probably not `processRunner`
+  anymore unless something else in your actual repo state still needs it — check the real
+  `ConfigLoader.load` signature before deciding).
+- `Sources/VersionManagerKit/Runners/CheckRunner.swift` — the `consistencyIssues`/format-validation
+  helper (added in Task 11) changes **semantically, not just syntactically**: it used to validate that
+  the *extracted* version's format was valid; now it must additionally (or instead — read the current
+  code and decide the cleanest merge) check that **every extracted version equals `config.version`**.
+  A file rule whose extracted version disagrees with the config's `version` field is now a `check`
+  failure — this is the new, stronger meaning of "check" that the schema change specifically enables
+  (DESIGN.md's updated §1.2 `check` bullet list spells this out). Keep the existing zero-match and
+  regex-validity checks unchanged; only the "does the extracted string match expectations" check
+  changes from format-validity to config-equality.
+- `Sources/VersionManagerKit/Runners/BumpRunner.swift` — update the `VersionFormatValidator().validate`
+  call site to the new signature. Also: this is where the config-file-as-implicit-replacement-rule
+  design point above must be wired in — `BumpPlanner.plan` (or `BumpRunner` itself, wrapping
+  `BumpPlanner`'s output) needs to add a `FileReplacementPlan` for `.appversion.yml` itself, written
+  through the same atomic `PlanApplier` path as every other file, so `bump` actually updates the
+  source-of-truth string when it runs.
+- `Sources/VersionManagerCLI/CurrentCommand.swift` — no schema reference directly, but its behavior
+  changes downstream once `CurrentRunner` is reworked; update its call site only if `CurrentRunner`'s
+  init signature changes (per the note above).
+
+*Confirmed NOT touched by this rework (verified by the survey, do not go looking for changes here):*
+`DiffRenderer.swift`, `PlanApplier.swift`, `BumpPlan.swift`, `PlanValidator.swift` (uses
+`config.files` only, no version-format assumptions), `HookRunner.swift`, `SemanticVersion.swift`,
+`VersionTransformer.swift`, `BumpCommand.swift`, `CheckCommand.swift`, `InstallSkillsCommand.swift`,
+`GlobalOptions.swift`, `Regexes.swift` (its `{version}` regex is the rename-template placeholder,
+unrelated to version-format).
+
+*Tests — mechanical `Config(version: .init(format: .semver, pattern: nil, strict: ...), sourceOfTruth: ...)`
+→ `Config(version: "x.y.z", strict: ..., ...)` rewrites (drop the `sourceOfTruth:` argument
+entirely from every call site):*
+- `Tests/VersionManagerKitTests/VersionFormatValidatorTests.swift` — 5 literal construction sites,
+  update to whatever `VersionFormatValidator.validate`'s new signature takes.
+- `Tests/VersionManagerKitTests/ConfigValidatorTests.swift` — 11 literal construction sites. **Also
+  delete these two whole tests outright** (not just patch them): `unknownSourceOfTruthFails`,
+  `knownSourceOfTruthPasses` — they test a feature that no longer exists. Add new tests for the new
+  `invalidVersionField`-style validation instead (config.version must parse as SemVer, respecting
+  strict).
+- `Tests/VersionManagerKitTests/PlanValidatorTests.swift` — 1 site via the shared `makeConfig(fileRules:)`
+  helper — small blast radius since every test in the file reuses it.
+- `Tests/VersionManagerKitTests/BumpPlannerTests.swift` — 7 inline construction sites.
+- `Tests/VersionManagerKitTests/ConfigLoaderTests.swift` — 1 inline fixture YAML string
+  (`version:\n  format: semver` → `version: "x.y.z"` scalar).
+- `Tests/VersionManagerKitTests/ConfigDecodingTests.swift` — 2 inline fixture YAML strings need the
+  same rewrite; one (`fullConfigDecodes`) also currently has `source_of_truth: xcodeproj` in its YAML
+  — remove that line. Update the assertions accordingly:
+  `#expect(config.version.format == .semver)` → something like `#expect(config.version == "1.18.0")`;
+  `#expect(config.sourceOfTruth == "xcodeproj")` → delete this assertion;
+  `#expect(config.version.strict == true)` → `#expect(config.strict == true)` (top-level now).
+- `Tests/VersionManagerKitTests/RunnerIntegrationTests.swift` — 4 inline fixture YAML strings need the
+  schema rewrite (the shared `writeFixture` helper, plus 3 test-specific inline configs). **Also**:
+  `currentExtractsVersion` needs a premise rewrite, not just a fixture edit — it currently asserts
+  "current extracts the version by regex-reading `Sources/Version.swift`"; under the new design it
+  should assert "current returns `config.version` verbatim, without touching any file rule's content
+  at all" (you may want to construct a fixture where the file's embedded version deliberately
+  DIFFERS from `config.version`, to prove `current` really reads the config and not the file).
+
+*Confirmed NOT needing changes (verified by the survey):* `DiffRendererTests.swift`,
+`PlanApplierTests.swift`, `HookRunnerTests.swift`, `FileSystemAccessTests.swift`,
+`SemanticVersionTests.swift`, `Support/MockProcessRunner.swift`,
+`Tests/VersionManagerCLITests/BumpArgumentsValidatorTests.swift` (unrelated CLI arg validation, no
+`Config` reference), `Tests/VersionManagerKitTests/VersionTransformerTests.swift` (its `format:`
+references are all `Config.RenameRule.format`, the filename template, unrelated to
+`Config.VersionFormat` — do not touch this file, it was a false-positive grep hit during the survey).
+*No `format: pattern` (custom non-semver) usage exists anywhere in the codebase, production or test —
+its removal has zero blast radius beyond the files listed above.*
+
+**No new `--json` output shape decisions needed here** — Task 12 (next) owns `--json` for `current`,
+and this rework only needs `current`'s plain-text/`CurrentRunner` return type to be a `String` (the
+version), which Task 12 can format into `{"version": "..."}` exactly as originally planned.
+
+- [ ] **Step 1: Rewrite `Config.swift`**
+
+Delete the `VersionFormat` struct and its nested `Format` enum. Change `version: VersionFormat` to
+`version: String`. Add `package var strict: Bool?`. Delete `sourceOfTruth` and its CodingKeys entry.
+Read the current file first (`Sources/VersionManagerKit/Config/Config.swift`) since your repo's exact
+current state (including the memberwise init Task 3 added to `FileRule`, unrelated to this change) may
+differ slightly from what any single line-numbered survey snapshot shows — edit the real file in front
+of you, not a diff applied blind.
+
+- [ ] **Step 2: Update `ConfigDecodingTests.swift` fixtures and assertions to match**
+
+Run: `swift build` — expect compile errors pointing at every call site needing the mechanical
+`Config(version:strict:...)` rewrite. Use these errors as your worklist for Steps 3-7; you do not need
+to re-derive the file list above from scratch, it's already complete, but the compiler will confirm
+you didn't miss a spot.
+
+- [ ] **Step 3: Rewrite `ConfigValidator.swift` + delete `ConfigValidator+HooksValidator.swift`,
+  add SemVer validation of `config.version`**
+
+Add a new `SemanticVersion(parsing:)`-based check (reusing the type from Task 5, unmodified) that
+`config.version` parses successfully and — when `config.strict != false` — has no pre-release/build
+suffix. Wire this into `ConfigValidator.validate(_:)`. Write/update `ConfigValidatorTests.swift`
+accordingly: delete the two source-of-truth tests, add tests for `config.version` being invalid SemVer
+and for the strict/non-strict pre-release-suffix cases.
+
+- [ ] **Step 4: Rewrite `VersionFormatValidator.swift`**
+
+Delete the `.pattern` branch. New signature takes `strict: Bool` directly. Update
+`VersionFormatValidatorTests.swift`'s 5 construction sites to match (no more `Config.VersionFormat`
+literal — just pass a plain `Bool`).
+
+- [ ] **Step 5: Rewrite `CurrentRunner.swift`**
+
+Replace the whole `run` method with: load config via `ConfigLoader`, validate via `ConfigValidator`,
+return `config.version`. Simplify `CurrentRunnerError` to whatever's still reachable (likely just
+whatever `ConfigLoader`/`ConfigValidator` can throw — `CurrentRunner` itself may not need its own
+error type anymore). Rewrite `RunnerIntegrationTests.swift`'s `currentExtractsVersion` per the note
+above (assert it returns `config.version` verbatim, ideally with a fixture where the file's embedded
+version differs from the config's, to prove the source of truth really is the config).
+
+- [ ] **Step 6: Rewrite `CheckRunner.swift`'s consistency check**
+
+Change `consistencyIssues` (or wherever the check lives) to compare each rule's extracted version
+against `config.version` for equality, not just format-validity. Update
+`RunnerIntegrationTests.swift`'s `checkDetectsVersionMismatch` (and any other check-related tests) to
+assert against this new, stronger semantics.
+
+- [ ] **Step 7: Wire `.appversion.yml` itself into `BumpPlanner`'s replacement plan**
+
+This is the step most likely to need real design judgment, not transcription. Options to consider
+(pick the one that fits the actual `BumpPlanner`/`BumpRunner` code you're looking at, and explain your
+choice in the report): (a) `BumpPlanner.plan(config:projectRoot:newVersion:)` synthesizes an extra
+`Config.FileRule`-equivalent internally for the config file itself (pattern `'version: "(\d+\.\d+\.\d+)"'`,
+path = the config file's own path) and folds it into the existing glob-expand-and-match loop like any
+other rule; or (b) `BumpRunner` constructs this synthetic replacement separately, after calling
+`BumpPlanner.plan`, and appends it to `plan.replacements` before validation. Either is acceptable as
+long as: the config file's version-line replacement goes through the SAME reverse-order capture-group
+replacement logic as every other file (no special-cased string manipulation), it participates in
+`PlanValidator`'s checks (occurrences, no-op-bump, etc.) the same as any other rule, and it's written
+atomically through `PlanApplier` alongside everything else — never as a separate ad-hoc write. Add a
+`RunnerIntegrationTests.swift` test proving that after `bump`, `.appversion.yml`'s `version:` line has
+the new value AND any comments elsewhere in the file are untouched (write a fixture `.appversion.yml`
+with an inline `#` comment somewhere, bump, and assert the comment survives verbatim).
+
+- [ ] **Step 8: Full suite green, format-lint clean, commit**
+
+Run: `swift test` — expect all tests passing, including every rewritten one.
+Run: `make format-lint` — 0 violations.
+
+Given the scope of this task, expect to split into several commits per the usual gitnagg threshold
+(≥200 added lines / ≥6 files errors). A reasonable split: (1) `Config.swift` + `ConfigDecodingTests.swift`;
+(2) `ConfigValidator.swift` + delete `ConfigValidator+HooksValidator.swift` + `ConfigValidatorTests.swift`;
+(3) `VersionFormatValidator.swift` + `VersionFormatValidatorTests.swift`; (4) `CurrentRunner.swift` +
+its integration test; (5) `CheckRunner.swift`'s consistency check + its integration test; (6)
+`BumpPlanner`/`BumpRunner`'s config-self-replacement wiring + its integration test + the remaining
+mechanical `PlanValidatorTests.swift`/`BumpPlannerTests.swift` construction-site fixes. Commit each
+component once its own tests are green, don't wait until the whole task is done to make the first
+commit.
+
+```bash
+git commit -m "$(cat <<'EOF'
+<component-specific message, e.g. "Rework Config to make version.yml a plain string source of truth">
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
 ### Task 12: `--json` output for bump/check/current (Phase 3)
 
 **Files:**
@@ -4011,13 +4239,12 @@ package struct InitRunner {
 
     private static let template = """
     # .appversion.yml
-    version:
-      # semver (default) or pattern
-      format: semver
-      # strict: true (default) rejects pre-release/build metadata like 1.18.0-beta.1
-      # strict: false
+    # version: the single source of truth. `current`/`check` read this value directly;
+    # `bump` rewrites it (and every matching files[] rule) to the new version.
+    version: "0.1.0"
 
-    # source_of_truth: xcodeproj   # rule id used by `current`/`check`; defaults to the first files[] entry
+    # strict: true (default) rejects pre-release/build metadata like 1.18.0-beta.1
+    # strict: false
 
     files:
       - id: version-swift
@@ -4076,117 +4303,15 @@ EOF
 
 ---
 
-### Task 14: `format: pattern` custom version format support (Phase 3)
+### Task 14: SKIPPED — custom `format: pattern` version support dropped from scope
 
-**Files:**
-- Modify: `Sources/VersionManagerKit/Versioning/VersionFormatValidator.swift` (already handles `.pattern` per Task 5 — this task adds the missing config-time validation)
-- Modify: `Sources/VersionManagerKit/Config/ConfigValidator+FilesValidator.swift` (add `patternRequiredForCustomFormat` check — this is a top-level `version.format` check, not per-file, so add it to `ConfigValidator.swift` directly instead)
-- Modify: `Sources/VersionManagerKit/Config/ConfigValidator.swift`
-- Modify: `Tests/VersionManagerKitTests/ConfigValidatorTests.swift`
-- Modify: `Tests/VersionManagerKitTests/VersionFormatValidatorTests.swift`
-
-**Interfaces:**
-- Consumes: `Config.VersionFormat`, `ConfigValidatorError.patternRequiredForCustomFormat` (already declared in Task 3).
-- Produces: no new public types — this task only adds a missing validation rule and confirms `VersionFormatValidator.validate` (from Task 5) already handles `.pattern` correctly (it does — Task 5 Step 7 already wrote the `.pattern` branch); this task's real work is the config-level guard plus tests proving pattern-format round-trips (e.g. build-number config from DESIGN.md §2.1's `.buildnumber.yml` example).
-
-- [ ] **Step 1: Write the failing ConfigValidator test**
-
-Add to `Tests/VersionManagerKitTests/ConfigValidatorTests.swift`:
-```swift
-@Test("format: pattern without a pattern string fails")
-func patternFormatWithoutPatternFails() {
-    let config = Config(
-        version: .init(format: .pattern, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
-        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+)", occurrences: .all)],
-        renames: nil,
-        hooks: nil
-    )
-    let validator = ConfigValidator()
-    #expect(throws: (any Error).self) {
-        try validator.validate(config)
-    }
-}
-
-@Test("format: pattern with a pattern string passes")
-func patternFormatWithPatternPasses() throws {
-    let config = Config(
-        version: .init(format: .pattern, pattern: "\\d+", strict: nil),
-        sourceOfTruth: nil,
-        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+)", occurrences: .all)],
-        renames: nil,
-        hooks: nil
-    )
-    let validator = ConfigValidator()
-    try validator.validate(config)
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `swift test --filter ConfigValidatorTests`
-Expected: FAIL on the two new tests.
-
-- [ ] **Step 3: Add the check to `ConfigValidator.swift`**
-
-```swift
-package func validate(_ config: Config) throws {
-    var errors: [ConfigValidatorError] = []
-    errors += validateFiles(config.files)
-    errors += validateRenames(config.renames)
-    errors += validateSourceOfTruth(config.sourceOfTruth, files: config.files)
-    if config.version.format == .pattern, config.version.pattern == nil {
-        errors.append(.patternRequiredForCustomFormat)
-    }
-    if !errors.isEmpty {
-        throw ConfigValidationFailure(errors: errors)
-    }
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `swift test --filter ConfigValidatorTests`
-Expected: PASS.
-
-- [ ] **Step 5: Add the build-number use case test to VersionFormatValidatorTests**
-
-Add to `Tests/VersionManagerKitTests/VersionFormatValidatorTests.swift`:
-```swift
-@Test("custom pattern format validates a bare integer build number")
-func customPatternValidatesBuildNumber() throws {
-    let validator = VersionFormatValidator()
-    let format = Config.VersionFormat(format: .pattern, pattern: "\\d+", strict: nil)
-    try validator.validate("42", against: format)
-}
-
-@Test("custom pattern format rejects non-matching input")
-func customPatternRejectsNonMatching() {
-    let validator = VersionFormatValidator()
-    let format = Config.VersionFormat(format: .pattern, pattern: "\\d+", strict: nil)
-    #expect(throws: (any Error).self) {
-        try validator.validate("v1.0", against: format)
-    }
-}
-```
-
-Run: `swift test --filter VersionFormatValidatorTests`
-Expected: PASS (Task 5's implementation already handles this — these tests just add coverage for DESIGN.md §2.1's build-number scenario).
-
-- [ ] **Step 6: Run full suite and commit**
-
-Run: `swift test`
-Expected: all pass.
-
-```bash
-git add Sources/VersionManagerKit/Config/ConfigValidator.swift Tests/VersionManagerKitTests/ConfigValidatorTests.swift Tests/VersionManagerKitTests/VersionFormatValidatorTests.swift
-git commit -m "$(cat <<'EOF'
-Validate version.pattern is present when format is pattern
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-EOF
-)"
-```
+**Ruling (2026-08-16, requirement change from the user, mid-execution):** version-manager is semver-only.
+Custom non-semver version formats (`format: pattern` + arbitrary regex, e.g. for bare integer build
+numbers) are out of scope entirely — not deferred, not a future candidate, just not part of this tool.
+This task is void. Its slot is intentionally left empty in the numbering so the ledger and prior task
+reports that reference "Task 14" by number stay traceable; no code from this task exists or should exist.
+See Task 11.5 (rework) for the schema change that made this task's premise (`Config.VersionFormat`,
+`ConfigValidatorError.patternRequiredForCustomFormat`) obsolete.
 
 ---
 
