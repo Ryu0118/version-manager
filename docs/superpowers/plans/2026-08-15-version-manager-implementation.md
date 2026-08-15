@@ -4055,12 +4055,19 @@ Expected: PASS.
 
 - [ ] **Step 5: Wire `--json` into the three commands**
 
+Note: `Ryu0118/FileManagerProtocol`'s only production conformer is `Foundation.FileManager` (use
+`FileManager.default`, not a fictional `LiveFileManager`); `Ryu0118/ProcessRunning`'s live type is
+`ProcessRunner()` (not `LiveProcessRunner()`) — both confirmed across Tasks 9-11's actual
+implementations. `CurrentRunner`'s exact init signature may have changed in Task 11.5's rework (it
+may no longer need `processRunner` at all, since `current` now just returns `config.version` — check
+the real signature in your repo before writing this call site).
+
 Modify `BumpCommand.run()`:
 ```swift
 package func run() async throws {
     try BumpArgumentsValidator().validate(version: version)
-    let fileManager = LiveFileManager()
-    let processRunner = LiveProcessRunner()
+    let fileManager = FileManager.default
+    let processRunner = ProcessRunner()
     let runner = BumpRunner(fileManager: fileManager, processRunner: processRunner)
     let plan = try await runner.run(
         configPath: globalOptions.config,
@@ -4083,7 +4090,7 @@ package func run() async throws {
 Modify `CheckCommand.run()`:
 ```swift
 package func run() async throws {
-    let fileManager = LiveFileManager()
+    let fileManager = FileManager.default
     let runner = CheckRunner(fileManager: fileManager)
     let result = try await runner.run(configPath: globalOptions.config, projectRoot: FileManager.default.currentDirectoryPath)
     if json {
@@ -4115,13 +4122,13 @@ package struct CheckResultJSON: Encodable, Sendable {
 }
 ```
 
-Modify `CurrentCommand.run()`:
+Modify `CurrentCommand.run()` (adjust the `CurrentRunner` construction to match its actual
+post-rework init signature — it may drop `processRunner` entirely):
 ```swift
 package func run() async throws {
-    let fileManager = LiveFileManager()
-    let processRunner = LiveProcessRunner()
-    let runner = CurrentRunner(fileManager: fileManager, processRunner: processRunner)
-    let version = try await runner.run(configPath: globalOptions.config, projectRoot: FileManager.default.currentDirectoryPath)
+    let fileManager = FileManager.default
+    let runner = CurrentRunner(fileManager: fileManager)
+    let version = try await runner.run(configPath: globalOptions.config)
     if json {
         let data = try JSONEncoder().encode(["version": version])
         print(String(decoding: data, as: UTF8.self))
@@ -4277,9 +4284,12 @@ Expected: PASS.
 
 - [ ] **Step 5: Wire `InitCommand.run()`**
 
+Note: `Ryu0118/FileManagerProtocol`'s only production conformer is `Foundation.FileManager` itself
+(confirmed across Tasks 3-11) — there is no separate `LiveFileManager` type. Use `FileManager.default`.
+
 ```swift
 package func run() async throws {
-    let fileManager = LiveFileManager()
+    let fileManager = FileManager.default
     let runner = InitRunner(fileManager: fileManager)
     try runner.run(configPath: globalOptions.config, force: force)
     print("Wrote \(globalOptions.config)")
@@ -4341,8 +4351,7 @@ extract/replace them, and what to do around a version bump.
 ## Minimal config
 
 ```yaml
-version:
-  format: semver
+version: "1.0.0"
 files:
   - id: version-swift
     path: Sources/MyToolCLI/Version.swift
@@ -4356,13 +4365,12 @@ accidental matches elsewhere in the file.
 
 ## Fields
 
-- `version.format`: `semver` (default) or `pattern`. `pattern` requires `version.pattern`
-  (a regex the whole version string must match) — use this for non-semver schemes like
-  bare build numbers (`pattern: '\d+'`).
-- `version.strict`: (semver only, default `true`) rejects pre-release/build-metadata
-  suffixes like `1.18.0-beta.1`. Set `false` to allow them.
-- `source_of_truth`: which `files[].id` is authoritative for `current`/`check`. Defaults
-  to the first `files[]` entry.
+- `version`: **the single source of truth**, a plain SemVer 2.0.0 string. `current` and
+  `check` read this value directly — they never regex-extract a version from a file.
+  `bump` rewrites this field itself (in place, preserving every other comment/field in
+  the file) as part of the same replacement pass that updates every `files[]` rule.
+- `strict`: (default `true`) rejects pre-release/build-metadata suffixes like
+  `1.18.0-beta.1` in `version`. Set `false` to allow them.
 - `files[].occurrences`: `all` (default, requires ≥1 match) or an integer requiring an
   exact match count. Use an integer whenever you know exactly how many times a version
   string should appear — it turns "someone deleted a line" into a hard error.
@@ -4374,11 +4382,8 @@ accidental matches elsewhere in the file.
   not roll back already-written changes (hooks may be non-idempotent external actions).
   Both receive `APPVERSION_OLD`, `APPVERSION_NEW`, `APPVERSION_CONFIG_DIR` as env vars.
 
-## Multiple version schemes in one project
-
-If a project tracks a semver marketing version *and* an integer build number, use two
-config files: `.appversion.yml` (semver) and e.g. `.buildnumber.yml`
-(`format: pattern`, `pattern: '\d+'`), selecting between them with `--config`.
+version-manager is semver-only — there is no support for custom/non-semver version
+schemes (e.g. bare integer build numbers).
 
 ## Common mistake: replacing a whole line instead of just the version
 
@@ -4411,8 +4416,8 @@ exit on any failure.
 - `version-manager check [--json]` — verifies the current repo state is internally
   consistent (every rule matches, all matched versions agree). Exits non-zero on any
   inconsistency. Good as a CI gate on release PRs.
-- `version-manager current [--json]` — prints the current version per the config's
-  `source_of_truth` rule.
+- `version-manager current [--json]` — prints `.appversion.yml`'s `version` field
+  verbatim (the single source of truth).
 - `version-manager init [--force]` — writes a commented `.appversion.yml` template.
 
 ## Agent-safe usage
@@ -4718,10 +4723,10 @@ package struct InstallSkillsRunner {
 }
 ```
 
-`InstallSkillsCommand.run()`:
+`InstallSkillsCommand.run()` (use `FileManager.default` — no separate `LiveFileManager` type exists):
 ```swift
 package func run() async throws {
-    let fileManager = LiveFileManager()
+    let fileManager = FileManager.default
     let runner = InstallSkillsRunner(fileManager: fileManager)
     let result = try runner.run(agent: agent, dir: dir, force: force)
     if json {
@@ -4762,15 +4767,22 @@ EOF
 
 ### Task 17: README + docsync.yml (Phase 3)
 
+**Note: `README.md` was already written and committed/pushed to `origin/main` ahead of this task's
+dispatch (user request, 2026-08-16), reflecting the reworked schema (Task 11.5).** This task's Step 1
+is therefore a VERIFICATION pass, not a from-scratch write: read the existing `README.md`, confirm it
+matches the actual implemented behavior of every command by this point in the plan (especially
+anything Tasks 12-16 added — `--json` output, `install-skills`), and fix any drift you find rather
+than overwriting it wholesale. The docsync.yml work (Step 2 onward) is still net-new.
+
 **Files:**
-- Create: `README.md`
+- Verify/update (likely already exists): `README.md`
 - Create: `docsync.yml`
 
 **Interfaces:**
 - Consumes: nothing new — pure documentation reflecting Tasks 1–16's actual implemented behavior.
 - Produces: nothing consumed by later tasks (Phase 4's `.appversion.yml` doesn't reference README.md).
 
-- [ ] **Step 1: Write `README.md`**
+- [ ] **Step 1: Verify `README.md` against the actual current CLI, update only what's drifted**
 
 ```markdown
 # version-manager
@@ -5131,10 +5143,7 @@ scripts: {}
 - [ ] **Step 5: Write the repo's own `.appversion.yml`**
 
 ```yaml
-version:
-  format: semver
-
-source_of_truth: version-swift
+version: "0.1.0"
 
 files:
   - id: version-swift
@@ -5166,16 +5175,19 @@ files:
 - [ ] **Step 6: Verify the repo's own config against `check`**
 
 Run: `swift run version-manager check`
-Expected: `✅ consistent` — all 5 files currently read `0.1.0` and each rule matches exactly once.
+Expected: `✅ consistent` — all 4 `files[]` rules currently read `0.1.0`, matching the config's own
+`version: "0.1.0"` field, each rule matches exactly once.
 
 Run: `swift run version-manager bump --dry-run 0.1.1`
-Expected: a diff touching all 5 files, each changing `0.1.0` → `0.1.1`.
+Expected: a diff touching all 5 locations — the 4 `files[]` rules AND `.appversion.yml`'s own
+`version:` field itself (per Task 11.5's rework, config-self-replacement goes through the same
+plan/apply pipeline as every other file) — each changing `0.1.0` → `0.1.1`.
 
 (Do not actually run `bump` without `--dry-run` here — this task only wires the dogfooding config, it doesn't perform a real release.)
 
 - [ ] **Step 7: Swap `publish-release.yml`'s commit-version step**
 
-Modify the `commit-version` job in `.github/workflows/publish-release.yml` (created in Task 19): replace its `sed`-based version bump step with a call to the just-built release binary — `./version-manager bump "$VERSION"` (using the release binary artifact downloaded from the `build-macos`/`build-linux` jobs in this same workflow run, per DESIGN.md §5.2's dogfooding note), then `git add -A && git commit` the resulting diff across all 5 files instead of the previous single-file `sed` commit.
+Modify the `commit-version` job in `.github/workflows/publish-release.yml` (created in Task 19): replace its `sed`-based version bump step with a call to the just-built release binary — `./version-manager bump "$VERSION"` (using the release binary artifact downloaded from the `build-macos`/`build-linux` jobs in this same workflow run, per DESIGN.md §5.2's dogfooding note), then `git add -A && git commit` the resulting diff across all 5 locations (4 files + the config's own `version:` field) instead of the previous single-file `sed` commit.
 
 - [ ] **Step 8: Final full-suite verification and commit**
 
@@ -5192,7 +5204,7 @@ EOF
 )"
 ```
 
-This completes DESIGN.md §8 Phase 4 and the plan as a whole: version-manager now manages its own version across 5 files via its own `.appversion.yml`, closing the loop described in DESIGN.md's opening paragraph.
+This completes DESIGN.md §8 Phase 4 and the plan as a whole: version-manager now manages its own version across 4 files (plus its own `.appversion.yml` `version:` field) via its own `.appversion.yml`, closing the loop described in DESIGN.md's opening paragraph.
 
 ---
 
