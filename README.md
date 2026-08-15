@@ -98,12 +98,12 @@ version-manager check
 
 ## Configuration
 
-`.appversion.yml` lives at your project root. The minimum viable config is one
-`version` block and one `files` rule:
+`.appversion.yml` lives at your project root. The minimum viable config is a `version`
+string (the single source of truth — `current` and `check` read it directly, they never
+regex-extract a version from a file) and one `files` rule:
 
 ```yaml
-version:
-  format: semver
+version: "1.0.0"
 
 files:
   - id: version-swift
@@ -122,10 +122,7 @@ A more complete example, covering an Xcode project with multiple targets, a fast
 deliverfile, a README badge, a version-encoded config filename, and pre/post hooks:
 
 ```yaml
-version:
-  format: semver
-
-source_of_truth: xcodeproj
+version: "1.17.2"
 
 files:
   - id: xcodeproj
@@ -159,9 +156,9 @@ hooks:
       run: "./scripts/insert-changelog-entry.sh"
 ```
 
-Two-tier version schemes (a semver marketing version alongside an integer build
-number) work too — point a second config at the build number with
-`format: pattern` and `pattern: '\d+'`, and select it with `--config`.
+`strict` (default `true`) rejects pre-release/build-metadata suffixes like
+`1.18.0-beta.1` in `version` — set it to `false` at the top level to allow them.
+version-manager is semver-only; there is no support for non-semver version schemes.
 
 Full schema reference: `version-manager install-skills` installs a
 `version-manager-config-guide` Agent Skill with the complete field-by-field
@@ -171,20 +168,24 @@ directly.
 ## Commands
 
 ```bash
-version-manager bump <version> [--dry-run] [--json] [--skip-hooks] [--force]
-version-manager check [--json]
-version-manager current [--json]
-version-manager init [--force]
+version-manager bump <version> [--dry-run] [--json] [--skip-hooks] [--force] [--config <path>] [--verbose]
+version-manager check [--json] [--config <path>] [--verbose]
+version-manager current [--json] [--config <path>] [--verbose]
+version-manager init [--force] [--config <path>] [--verbose]
 version-manager install-skills [--agent claude-code|codex|both] [--dir <path>] [--force] [--json]
 ```
 
 | Command | What it does |
 |---|---|
 | `bump <version>` | Plan, validate, then apply a version bump across every configured file, rename, and hook. |
-| `check` | Verify the current repo state is internally consistent — every rule matches, every extracted version agrees. Non-zero exit on drift. Ideal as a CI gate before merging a release PR. |
-| `current` | Print the current version, resolved from the config's `source_of_truth` rule. |
+| `check` | Verify the current repo state is internally consistent — every rule matches, every extracted version agrees with the config's `version` field. Non-zero exit on drift. Ideal as a CI gate before merging a release PR. |
+| `current` | Print the current version, read directly from the config's `version` field. |
 | `init` | Write a commented `.appversion.yml` template to get started. |
 | `install-skills` | Install version-manager's own Agent Skills (config authoring guide + CLI usage guide) into a target project, for Claude Code and/or Codex. |
+
+`--config <path>` selects a config file other than `.appversion.yml` (default);
+`--verbose` turns on detailed logging. Both are available on every subcommand except
+`install-skills`.
 
 `--dry-run` builds and validates the full change set — every regex match, every
 occurrence count, every rename — without writing anything, then prints the diff.

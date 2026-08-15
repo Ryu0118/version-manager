@@ -1,0 +1,17 @@
+rules:
+- name: readme-commands
+  sources:
+  - Sources/VersionManagerCLI/BumpCommand.swift
+  - Sources/VersionManagerCLI/CheckCommand.swift
+  - Sources/VersionManagerCLI/CurrentCommand.swift
+  - Sources/VersionManagerCLI/InitCommand.swift
+  - Sources/VersionManagerCLI/InstallSkillsCommand.swift
+  doc: README.md
+  message: README Commands section is out of sync with CLI command definitions
+  checksum: cfd3c43e9e0ab0ad64739e3d541e77e2f09f3bab45c62e6be1198cf6a3ec6037
+- name: claude-config-schema
+  sources:
+  - Sources/VersionManagerKit/Config/Config.swift
+  doc: DESIGN.md
+  message: DESIGN.md §2 config schema is out of sync with Config.swift
+  checksum: adf9a690a7047c53f9fd0a00f9495e6116a319aa39ccc6be5799ea8d8f2732cb
