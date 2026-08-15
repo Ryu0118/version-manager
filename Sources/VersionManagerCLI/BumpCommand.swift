@@ -1,4 +1,6 @@
 import ArgumentParser
+import Foundation
+import VersionManagerKit
 
 package struct BumpCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
@@ -26,6 +28,17 @@ package struct BumpCommand: AsyncParsableCommand {
     package init() {}
 
     package func run() async throws {
-        // implemented in Task 9
+        try BumpArgumentsValidator().validate(version: version)
+        let runner = BumpRunner(fileManager: FileManager.default)
+        let plan = try await runner.run(
+            configPath: globalOptions.config,
+            projectRoot: FileManager.default.currentDirectoryPath,
+            newVersion: version,
+            dryRun: dryRun,
+            skipHooks: skipHooks,
+            force: force
+        )
+        let renderer = DiffRenderer(useColor: !json)
+        print(renderer.render(plan))
     }
 }

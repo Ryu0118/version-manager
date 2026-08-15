@@ -1,4 +1,6 @@
 import ArgumentParser
+import Foundation
+import VersionManagerKit
 
 package struct CheckCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
@@ -14,6 +16,18 @@ package struct CheckCommand: AsyncParsableCommand {
     package init() {}
 
     package func run() async throws {
-        // implemented in Task 9
+        let runner = CheckRunner(fileManager: FileManager.default)
+        let result = try await runner.run(
+            configPath: globalOptions.config,
+            projectRoot: FileManager.default.currentDirectoryPath
+        )
+        if result.isConsistent {
+            print("✅ consistent")
+        } else {
+            for issue in result.issues {
+                print("❌ \(issue)")
+            }
+            throw ExitCode.failure
+        }
     }
 }
