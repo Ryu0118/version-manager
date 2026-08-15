@@ -81,16 +81,32 @@ func checkReportsConsistent() async throws {
     }
 }
 
-@Test("current extracts the version from the source-of-truth rule")
+@Test("current returns config.version verbatim, without reading any file rule")
 func currentExtractsVersion() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
-        try writeFixture(in: directory)
-        let runner = CurrentRunner(fileManager: FileManager.default, processRunner: MockProcessRunner())
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("Sources"),
+            withIntermediateDirectories: true
+        )
+        try """
+        version: "2.5.0"
+        files:
+          - id: version-swift
+            path: Sources/Version.swift
+            pattern: 'static let current = "(\\d+\\.\\d+\\.\\d+)"'
+            occurrences: 1
+        """.write(to: directory.appendingPathComponent(".appversion.yml"), atomically: true, encoding: .utf8)
+        try "enum Version {\n    static let current = \"1.0.0\"\n}\n".write(
+            to: directory.appendingPathComponent("Sources/Version.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let runner = CurrentRunner(fileManager: FileManager.default)
         let version = try await runner.run(
             configPath: directory.appendingPathComponent(".appversion.yml").path,
             projectRoot: directory.path
         )
-        #expect(version == "1.0.0")
+        #expect(version == "2.5.0")
     }
 }
 
