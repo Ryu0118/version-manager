@@ -71,12 +71,8 @@ package struct CheckRunner {
             issues.append("version mismatch across rules: \(extractedVersions.sorted().joined(separator: ", "))")
         }
 
-        if let version = extractedVersions.first, extractedVersions.count == 1 {
-            do {
-                try VersionFormatValidator().validate(version, against: config.version)
-            } catch {
-                issues.append("extracted version \"\(version)\" does not match configured format: \(error)")
-            }
+        for version in extractedVersions.sorted() where version != config.version {
+            issues.append("extracted version \"\(version)\" does not match configured version \"\(config.version)\"")
         }
 
         return issues
