@@ -34,6 +34,13 @@ package struct Config: Decodable, Sendable, Equatable {
             case id, path, pattern, occurrences
         }
 
+        package init(id: String, path: String, pattern: String, occurrences: Occurrences = .all) {
+            self.id = id
+            self.path = path
+            self.pattern = pattern
+            self.occurrences = occurrences
+        }
+
         package init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
