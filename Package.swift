@@ -41,6 +41,7 @@ let package = Package(
                 .product(name: "Rainbow", package: "Rainbow"),
                 .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
                 .product(name: "ProcessRunning", package: "ProcessRunning"),
+                .product(name: "Subprocess", package: "swift-subprocess"),
             ]
         ),
         .testTarget(
@@ -49,6 +50,8 @@ let package = Package(
                 "VersionManagerKit",
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
+                .product(name: "ProcessRunning", package: "ProcessRunning"),
+                .product(name: "Subprocess", package: "swift-subprocess"),
             ],
             exclude: ["Fixtures"]
         ),

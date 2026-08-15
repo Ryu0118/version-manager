@@ -114,3 +114,31 @@ func invalidRegexFails() {
         try validator.validate(config)
     }
 }
+
+@Test("rename format missing {version} placeholder fails")
+func renameFormatMissingPlaceholderFails() {
+    let config = Config(
+        version: .init(format: .semver, pattern: nil, strict: nil),
+        sourceOfTruth: nil,
+        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
+        renames: [.init(id: "r", directory: "Configs", format: "static.xcconfig", transform: nil)],
+        hooks: nil
+    )
+    let validator = ConfigValidator()
+    #expect(throws: (any Error).self) {
+        try validator.validate(config)
+    }
+}
+
+@Test("rename format with {version} placeholder passes")
+func renameFormatWithPlaceholderPasses() throws {
+    let config = Config(
+        version: .init(format: .semver, pattern: nil, strict: nil),
+        sourceOfTruth: nil,
+        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
+        renames: [.init(id: "r", directory: "Configs", format: "{version}.xcconfig", transform: nil)],
+        hooks: nil
+    )
+    let validator = ConfigValidator()
+    try validator.validate(config)
+}

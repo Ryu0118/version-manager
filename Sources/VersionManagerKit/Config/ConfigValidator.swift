@@ -6,6 +6,7 @@ package struct ConfigValidator {
     package func validate(_ config: Config) throws {
         var errors: [ConfigValidatorError] = []
         errors += validateFiles(config.files)
+        errors += validateRenames(config.renames)
         if !errors.isEmpty {
             throw ConfigValidationFailure(errors: errors)
         }
