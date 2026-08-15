@@ -6,6 +6,16 @@ package struct CheckResult: Sendable, Equatable {
     package let issues: [String]
 }
 
+package struct CheckResultJSON: Encodable, Sendable {
+    package let consistent: Bool
+    package let issues: [String]
+
+    package init(_ result: CheckResult) {
+        consistent = result.isConsistent
+        issues = result.issues
+    }
+}
+
 package struct CheckRunner {
     private let fileManager: any FileManagerProtocol
 
