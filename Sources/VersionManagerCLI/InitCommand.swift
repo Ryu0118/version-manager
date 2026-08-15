@@ -1,4 +1,6 @@
 import ArgumentParser
+import Foundation
+import VersionManagerKit
 
 package struct InitCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
@@ -14,6 +16,8 @@ package struct InitCommand: AsyncParsableCommand {
     package init() {}
 
     package func run() async throws {
-        // implemented in Task 14
+        let runner = InitRunner(fileManager: FileManager.default)
+        try runner.run(configPath: globalOptions.config, force: force)
+        print("Wrote \(globalOptions.config)")
     }
 }
