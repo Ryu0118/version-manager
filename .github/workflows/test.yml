@@ -64,5 +64,8 @@ jobs:
       - name: Show Swift version
         run: xcrun swift --version
 
+      - name: Generate skills
+        run: make generate-skills
+
       - name: Run tests
         run: xcrun swift test

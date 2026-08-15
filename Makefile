@@ -1,7 +1,7 @@
 SWIFTFORMAT := .nest/bin/swiftformat
 SWIFTLINT := .nest/bin/swiftlint
 
-.PHONY: install-commands format lint format-lint hooks test check
+.PHONY: install-commands format lint format-lint hooks test check generate-skills
 
 install-commands:
 	mise install
@@ -20,7 +20,10 @@ format-lint: format lint
 hooks:
 	./scripts/setup-hooks.sh
 
-test:
+generate-skills:
+	./scripts/generate-skills.sh
+
+test: generate-skills
 	swift test
 
 check: format lint test
