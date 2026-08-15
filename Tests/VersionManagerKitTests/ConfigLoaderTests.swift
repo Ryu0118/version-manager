@@ -7,8 +7,7 @@ import Testing
 func loadsValidConfig() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         let yaml = """
-        version:
-          format: semver
+        version: "1.0.0"
         files:
           - id: version-swift
             path: Sources/Version.swift

@@ -12,8 +12,7 @@ func singleMatchReplaces() async throws {
             encoding: .utf8
         )
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(
                 id: "v",
                 path: "Version.swift",
@@ -46,8 +45,7 @@ func multipleMatchesReplace() async throws {
             encoding: .utf8
         )
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(
                 id: "pbx",
                 path: "project.pbxproj",
@@ -78,8 +76,7 @@ func lengthChangingReplacementStaysCorrect() async throws {
             encoding: .utf8
         )
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(id: "multi", path: "multi.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
             renames: nil,
             hooks: nil
@@ -118,8 +115,7 @@ func globMultipleFilesProducesMultiplePlans() async throws {
             encoding: .utf8
         )
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(
                 id: "pbx",
                 path: "*.xcodeproj/project.pbxproj",
@@ -144,8 +140,7 @@ func globMultipleFilesProducesMultiplePlans() async throws {
 func zeroMatchingFilesProducesEmpty() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(id: "missing", path: "*.nonexistent", pattern: "v(\\d+)", occurrences: .all)],
             renames: nil,
             hooks: nil
@@ -169,8 +164,7 @@ func contextOutsideCaptureUnchanged() async throws {
             encoding: .utf8
         )
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(id: "f", path: "f.txt", pattern: "prefix-(\\d+\\.\\d+\\.\\d+)-suffix", occurrences: .all)],
             renames: nil,
             hooks: nil
@@ -194,8 +188,7 @@ func renameRuleProducesRenamePlan() async throws {
             encoding: .utf8
         )
         let config = Config(
-            version: .init(format: .semver, pattern: nil, strict: nil),
-            sourceOfTruth: nil,
+            version: "1.0.0",
             files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
             renames: [.init(
                 id: "r",

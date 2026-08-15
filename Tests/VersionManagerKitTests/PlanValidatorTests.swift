@@ -3,8 +3,7 @@ import Testing
 
 private func makeConfig(fileRules: [Config.FileRule]) -> Config {
     Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: fileRules,
         renames: nil,
         hooks: nil
