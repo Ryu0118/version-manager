@@ -30,18 +30,21 @@ package struct BumpRunner {
         plan.postHooks = config.hooks?.post ?? []
 
         let absoluteConfigPath = configPath.hasPrefix("/") ? configPath : projectRoot + "/" + configPath
-        if let configData = fileManager.contents(atPath: absoluteConfigPath),
-           let configContent = String(bytes: configData, encoding: .utf8),
-           let configReplacement = BumpPlanner.replacementPlan(
-               ruleID: "__appversion_config__",
-               path: absoluteConfigPath,
-               content: configContent,
-               pattern: #"version:\s*"(\d+\.\d+\.\d+)""#,
-               newVersion: newVersion
-           )
-        {
-            plan.replacements.append(configReplacement)
+        guard let configData = fileManager.contents(atPath: absoluteConfigPath),
+              let configContent = String(bytes: configData, encoding: .utf8)
+        else {
+            throw BumpRunnerError.configFileUnreadable(path: absoluteConfigPath)
         }
+        guard let configReplacement = BumpPlanner.replacementPlan(
+            ruleID: Self.configReplacementRuleID,
+            path: absoluteConfigPath,
+            content: configContent,
+            pattern: Self.configVersionPattern,
+            newVersion: newVersion
+        ) else {
+            throw BumpRunnerError.configVersionFieldNotFound(path: absoluteConfigPath)
+        }
+        plan.replacements.append(configReplacement)
 
         try PlanValidator().validate(plan, config: config, newVersion: newVersion, force: force)
 
@@ -60,5 +63,25 @@ package struct BumpRunner {
         }
 
         return plan
+    }
+
+    private static let configReplacementRuleID = "__appversion_config__"
+
+    private static let configVersionPattern =
+        #"version:\s*"?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)"?"#
+}
+
+package enum BumpRunnerError: Error, LocalizedError, Equatable {
+    case configFileUnreadable(path: String)
+    case configVersionFieldNotFound(path: String)
+
+    package var errorDescription: String? {
+        switch self {
+        case let .configFileUnreadable(path):
+            "could not read config file to update its own version field: \(path)"
+        case let .configVersionFieldNotFound(path):
+            "could not find a \"version:\" field to update in \(path) — refusing to bump " +
+                "silently without updating the config's own source-of-truth version"
+        }
     }
 }

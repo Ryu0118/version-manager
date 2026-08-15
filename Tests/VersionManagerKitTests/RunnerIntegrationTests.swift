@@ -86,6 +86,87 @@ func bumpUpdatesConfigVersionAndPreservesComments() async throws {
     }
 }
 
+@Test("bump updates config.version when it holds a pre-release version under strict: false")
+func bumpUpdatesConfigVersionWithPreReleaseSource() async throws {
+    try await FileManager.default.runInTemporaryDirectory { directory in
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("Sources"),
+            withIntermediateDirectories: true
+        )
+        try """
+        version: "1.0.0-beta.1"
+        strict: false
+        files:
+          - id: version-swift
+            path: Sources/Version.swift
+            pattern: 'static let current = "(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)"'
+            occurrences: 1
+        """.write(to: directory.appendingPathComponent(".appversion.yml"), atomically: true, encoding: .utf8)
+        try "enum Version {\n    static let current = \"1.0.0-beta.1\"\n}\n".write(
+            to: directory.appendingPathComponent("Sources/Version.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let runner = BumpRunner(fileManager: FileManager.default, processRunner: MockProcessRunner())
+        _ = try await runner.run(
+            configPath: directory.appendingPathComponent(".appversion.yml").path,
+            projectRoot: directory.path,
+            newVersion: "1.1.0",
+            dryRun: false,
+            skipHooks: true,
+            force: false
+        )
+        let configContent = try String(
+            contentsOf: directory.appendingPathComponent(".appversion.yml"),
+            encoding: .utf8
+        )
+        #expect(configContent.contains("version: \"1.1.0\""))
+        #expect(!configContent.contains("1.0.0-beta.1"))
+    }
+}
+
+@Test("bump throws instead of silently skipping when the config's version field can't be matched")
+func bumpThrowsWhenConfigVersionFieldUnmatched() async throws {
+    try await FileManager.default.runInTemporaryDirectory { directory in
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("Sources"),
+            withIntermediateDirectories: true
+        )
+        // Single-quoted YAML decodes to a valid Config.version string, but the replacement
+        // regex only recognizes unquoted or double-quoted "version:" lines — the pathological
+        // case that must hard-fail instead of silently leaving .appversion.yml unmodified.
+        try """
+        version: '1.0.0'
+        files:
+          - id: version-swift
+            path: Sources/Version.swift
+            pattern: 'static let current = "(\\d+\\.\\d+\\.\\d+)"'
+            occurrences: 1
+        """.write(to: directory.appendingPathComponent(".appversion.yml"), atomically: true, encoding: .utf8)
+        try "enum Version {\n    static let current = \"1.0.0\"\n}\n".write(
+            to: directory.appendingPathComponent("Sources/Version.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let runner = BumpRunner(fileManager: FileManager.default, processRunner: MockProcessRunner())
+        await #expect(throws: BumpRunnerError.self) {
+            _ = try await runner.run(
+                configPath: directory.appendingPathComponent(".appversion.yml").path,
+                projectRoot: directory.path,
+                newVersion: "1.1.0",
+                dryRun: false,
+                skipHooks: true,
+                force: false
+            )
+        }
+        let configContent = try String(
+            contentsOf: directory.appendingPathComponent(".appversion.yml"),
+            encoding: .utf8
+        )
+        #expect(configContent.contains("1.0.0"))
+    }
+}
+
 @Test("bump --dry-run writes nothing")
 func bumpDryRunWritesNothing() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
