@@ -28,7 +28,7 @@ private func writeFixture(in directory: URL) throws {
 func bumpEndToEnd() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         try writeFixture(in: directory)
-        let runner = BumpRunner(fileManager: FileManager.default)
+        let runner = BumpRunner(fileManager: FileManager.default, processRunner: MockProcessRunner())
         _ = try await runner.run(
             configPath: directory.appendingPathComponent(".appversion.yml").path,
             projectRoot: directory.path,
@@ -50,7 +50,7 @@ func bumpEndToEnd() async throws {
 func bumpDryRunWritesNothing() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         try writeFixture(in: directory)
-        let runner = BumpRunner(fileManager: FileManager.default)
+        let runner = BumpRunner(fileManager: FileManager.default, processRunner: MockProcessRunner())
         _ = try await runner.run(
             configPath: directory.appendingPathComponent(".appversion.yml").path,
             projectRoot: directory.path,

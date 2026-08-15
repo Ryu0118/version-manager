@@ -30,6 +30,7 @@ let package = Package(
             dependencies: [
                 "VersionManagerKit",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ProcessRunning", package: "ProcessRunning"),
             ]
         ),
         .target(

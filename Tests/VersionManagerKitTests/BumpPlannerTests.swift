@@ -24,7 +24,9 @@ func singleMatchReplaces() async throws {
             hooks: nil
         )
         let access = FileSystemAccess(fileManager: FileManager.default)
-        let planner = BumpPlanner(fileSystemAccess: access, fileManager: FileManager.default)
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: FileManager.default, processRunner: MockProcessRunner()
+        )
         let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "1.18.0")
 
         #expect(plan.replacements.count == 1)
@@ -56,7 +58,9 @@ func multipleMatchesReplace() async throws {
             hooks: nil
         )
         let access = FileSystemAccess(fileManager: FileManager.default)
-        let planner = BumpPlanner(fileSystemAccess: access, fileManager: FileManager.default)
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: FileManager.default, processRunner: MockProcessRunner()
+        )
         let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "1.18.0")
 
         #expect(plan.replacements.count == 1)
@@ -81,7 +85,9 @@ func lengthChangingReplacementStaysCorrect() async throws {
             hooks: nil
         )
         let access = FileSystemAccess(fileManager: FileManager.default)
-        let planner = BumpPlanner(fileSystemAccess: access, fileManager: FileManager.default)
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: FileManager.default, processRunner: MockProcessRunner()
+        )
         // 1.9.0 -> 1.10.0 grows each match by 1 character; a naive forward replace would corrupt indices 2 and 3.
         let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "1.10.0")
 
@@ -124,7 +130,9 @@ func globMultipleFilesProducesMultiplePlans() async throws {
             hooks: nil
         )
         let access = FileSystemAccess(fileManager: fileManager)
-        let planner = BumpPlanner(fileSystemAccess: access, fileManager: fileManager)
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: fileManager, processRunner: MockProcessRunner()
+        )
         let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "1.18.0")
 
         #expect(plan.replacements.count == 2)
@@ -143,7 +151,9 @@ func zeroMatchingFilesProducesEmpty() async throws {
             hooks: nil
         )
         let access = FileSystemAccess(fileManager: FileManager.default)
-        let planner = BumpPlanner(fileSystemAccess: access, fileManager: FileManager.default)
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: FileManager.default, processRunner: MockProcessRunner()
+        )
         let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "1.18.0")
 
         #expect(plan.replacements.isEmpty)
@@ -166,9 +176,44 @@ func contextOutsideCaptureUnchanged() async throws {
             hooks: nil
         )
         let access = FileSystemAccess(fileManager: FileManager.default)
-        let planner = BumpPlanner(fileSystemAccess: access, fileManager: FileManager.default)
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: FileManager.default, processRunner: MockProcessRunner()
+        )
         let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "2.0.0")
 
         #expect(plan.replacements[0].newContent == "prefix-2.0.0-suffix stays")
+    }
+}
+
+@Test("rename rule with transform produces a RenamePlan")
+func renameRuleProducesRenamePlan() async throws {
+    try await FileManager.default.runInTemporaryDirectory { directory in
+        try "v1.0.0".write(
+            to: directory.appendingPathComponent("a.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let config = Config(
+            version: .init(format: .semver, pattern: nil, strict: nil),
+            sourceOfTruth: nil,
+            files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
+            renames: [.init(
+                id: "r",
+                directory: "Configs",
+                format: "{version}.xcconfig",
+                transform: .init(run: "echo \"$APPVERSION_VALUE\" | tr '.' '-'")
+            )],
+            hooks: nil
+        )
+        let access = FileSystemAccess(fileManager: FileManager.default)
+        let processRunner = MockProcessRunner()
+        processRunner.stubbedOutput = "1-1-0\n"
+        let planner = BumpPlanner(
+            fileSystemAccess: access, fileManager: FileManager.default, processRunner: processRunner
+        )
+        let plan = try await planner.plan(config: config, projectRoot: directory.path, newVersion: "1.1.0")
+
+        #expect(plan.renames.count == 1)
+        #expect(plan.renames[0].newPath == directory.path + "/Configs/1-1-0.xcconfig")
     }
 }

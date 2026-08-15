@@ -1,12 +1,20 @@
 import FileManagerProtocol
+import Foundation
+import ProcessRunning
 
 package struct BumpPlanner {
     private let fileSystemAccess: FileSystemAccess
     private let fileManager: any FileManagerProtocol
+    private let processRunner: any ProcessRunning
 
-    package init(fileSystemAccess: FileSystemAccess, fileManager: some FileManagerProtocol) {
+    package init(
+        fileSystemAccess: FileSystemAccess,
+        fileManager: some FileManagerProtocol,
+        processRunner: some ProcessRunning
+    ) {
         self.fileSystemAccess = fileSystemAccess
         self.fileManager = fileManager
+        self.processRunner = processRunner
     }
 
     package func plan(config: Config, projectRoot: String, newVersion: String) async throws -> BumpPlan {
@@ -44,6 +52,26 @@ package struct BumpPlanner {
             }
         }
 
-        return BumpPlan(replacements: replacements)
+        var renames: [RenamePlan] = []
+        let oldVersion = replacements.first?.matches.first?.oldValue ?? ""
+        let transformer = VersionTransformer(processRunner: processRunner)
+        for rule in config.renames ?? [] {
+            let newValue = try await transformer.transform(
+                rule, value: newVersion, old: oldVersion, new: newVersion, configDir: projectRoot
+            )
+            let oldValue = try await transformer.transform(
+                rule, value: oldVersion, old: oldVersion, new: newVersion, configDir: projectRoot
+            )
+            let newFileName = rule.format.replacingOccurrences(of: "{version}", with: newValue)
+            let oldFileName = rule.format.replacingOccurrences(of: "{version}", with: oldValue)
+            let directory = projectRoot + "/" + rule.directory
+            renames.append(RenamePlan(
+                ruleID: rule.id,
+                oldPath: directory + "/" + oldFileName,
+                newPath: directory + "/" + newFileName
+            ))
+        }
+
+        return BumpPlan(replacements: replacements, renames: renames)
     }
 }
