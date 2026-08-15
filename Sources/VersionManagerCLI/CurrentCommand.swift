@@ -21,6 +21,13 @@ package struct CurrentCommand: AsyncParsableCommand {
             configPath: globalOptions.config,
             projectRoot: FileManager.default.currentDirectoryPath
         )
-        print(version)
+        if json {
+            let data = try JSONEncoder().encode(["version": version])
+            if let output = String(bytes: data, encoding: .utf8) {
+                print(output)
+            }
+        } else {
+            print(version)
+        }
     }
 }

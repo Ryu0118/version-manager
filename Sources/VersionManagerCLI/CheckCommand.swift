@@ -21,12 +21,19 @@ package struct CheckCommand: AsyncParsableCommand {
             configPath: globalOptions.config,
             projectRoot: FileManager.default.currentDirectoryPath
         )
-        if result.isConsistent {
+        if json {
+            let data = try JSONEncoder().encode(CheckResultJSON(result))
+            if let output = String(bytes: data, encoding: .utf8) {
+                print(output)
+            }
+        } else if result.isConsistent {
             print("✅ consistent")
         } else {
             for issue in result.issues {
                 print("❌ \(issue)")
             }
+        }
+        if !result.isConsistent {
             throw ExitCode.failure
         }
     }

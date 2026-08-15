@@ -39,7 +39,14 @@ package struct BumpCommand: AsyncParsableCommand {
             skipHooks: skipHooks,
             force: force
         )
-        let renderer = DiffRenderer(useColor: !json)
-        print(renderer.render(plan))
+        if json {
+            let data = try JSONEncoder().encode(BumpPlanJSON(plan))
+            if let output = String(bytes: data, encoding: .utf8) {
+                print(output)
+            }
+        } else {
+            let renderer = DiffRenderer(useColor: true)
+            print(renderer.render(plan))
+        }
     }
 }
