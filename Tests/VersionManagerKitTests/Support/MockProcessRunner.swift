@@ -13,6 +13,8 @@ final class MockProcessRunner: ProcessRunning, @unchecked Sendable {
     var stubbedExitCode: Int32 = 0
     var stubbedStandardError = ""
     var capturedEnvironment: [String: String]?
+    var capturedCommands: [String] = []
+    var capturedEnvironments: [[String: String]] = []
 
     private struct MockCollectedResult<Output: OutputProtocol, Error: OutputProtocol>: CollectedResultProtocol {
         let processIdentifier = ProcessIdentifier(value: 0)
@@ -32,6 +34,10 @@ final class MockProcessRunner: ProcessRunning, @unchecked Sendable {
         error: Error
     ) async throws -> any CollectedResultProtocol<Output, Error> {
         capturedEnvironment = environment.flattenedForTesting()
+        capturedEnvironments.append(environment.flattenedForTesting())
+        if let command = arguments.lastArgumentForTesting() {
+            capturedCommands.append(command)
+        }
         return try MockCollectedResult<Output, Error>(
             terminationStatus: .exited(stubbedExitCode),
             standardOutput: output.output(from: Array(stubbedOutput.utf8)),
@@ -119,5 +125,15 @@ extension Environment {
             result[key] = value
         }
         return result
+    }
+}
+
+extension Arguments {
+    /// `Arguments` exposes no public accessors for its stored values, so this parses its
+    /// `description` (a Swift-array-literal-style string, e.g. `["-c", "true"]`) and returns
+    /// the last quoted element — the script passed to `/bin/sh -c`.
+    func lastArgumentForTesting() -> String? {
+        let matches = description.matches(of: /"([^"]*)"/)
+        return matches.last.map { String($0.output.1) }
     }
 }
