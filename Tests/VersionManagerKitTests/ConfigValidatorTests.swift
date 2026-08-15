@@ -4,8 +4,7 @@ import Testing
 @Test("valid single-capture-group pattern passes")
 func validPatternPasses() throws {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "f1", path: "a.txt", pattern: "v(\\d+)", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -17,8 +16,7 @@ func validPatternPasses() throws {
 @Test("zero capture groups fails with context")
 func zeroCaptureGroupsFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "bad-rule", path: "a.txt", pattern: "v\\d+", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -40,8 +38,7 @@ func zeroCaptureGroupsFails() {
 @Test("two capture groups fails")
 func twoCaptureGroupsFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "bad-rule", path: "a.txt", pattern: "(v)(\\d+)", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -55,8 +52,7 @@ func twoCaptureGroupsFails() {
 @Test("duplicate rule IDs fail")
 func duplicateRuleIDsFail() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [
             .init(id: "dup", path: "a.txt", pattern: "v(\\d+)", occurrences: .all),
             .init(id: "dup", path: "b.txt", pattern: "v(\\d+)", occurrences: .all),
@@ -73,8 +69,7 @@ func duplicateRuleIDsFail() {
 @Test("absolute path escapes project root")
 func absolutePathFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "f1", path: "/etc/passwd", pattern: "v(\\d+)", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -88,8 +83,7 @@ func absolutePathFails() {
 @Test("parent-relative path escapes project root")
 func parentRelativePathFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "f1", path: "../outside.txt", pattern: "v(\\d+)", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -103,8 +97,7 @@ func parentRelativePathFails() {
 @Test("invalid regex fails with underlying message")
 func invalidRegexFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "f1", path: "a.txt", pattern: "(unclosed", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -118,8 +111,7 @@ func invalidRegexFails() {
 @Test("rename format missing {version} placeholder fails")
 func renameFormatMissingPlaceholderFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
         renames: [.init(id: "r", directory: "Configs", format: "static.xcconfig", transform: nil)],
         hooks: nil
@@ -133,8 +125,7 @@ func renameFormatMissingPlaceholderFails() {
 @Test("rename format with {version} placeholder passes")
 func renameFormatWithPlaceholderPasses() throws {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: nil,
+        version: "1.0.0",
         files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
         renames: [.init(id: "r", directory: "Configs", format: "{version}.xcconfig", transform: nil)],
         hooks: nil
@@ -143,11 +134,10 @@ func renameFormatWithPlaceholderPasses() throws {
     try validator.validate(config)
 }
 
-@Test("source_of_truth referencing an unknown rule id fails")
-func unknownSourceOfTruthFails() {
+@Test("invalid semver version field fails")
+func invalidVersionFieldFails() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: "does-not-exist",
+        version: "not-a-version",
         files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
         renames: nil,
         hooks: nil
@@ -158,11 +148,26 @@ func unknownSourceOfTruthFails() {
     }
 }
 
-@Test("source_of_truth referencing a known rule id passes")
-func knownSourceOfTruthPasses() throws {
+@Test("pre-release version field fails under strict")
+func preReleaseVersionFieldFailsUnderStrict() {
     let config = Config(
-        version: .init(format: .semver, pattern: nil, strict: nil),
-        sourceOfTruth: "f",
+        version: "1.0.0-beta.1",
+        strict: true,
+        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
+        renames: nil,
+        hooks: nil
+    )
+    let validator = ConfigValidator()
+    #expect(throws: (any Error).self) {
+        try validator.validate(config)
+    }
+}
+
+@Test("pre-release version field passes when strict is false")
+func preReleaseVersionFieldPassesWhenNotStrict() throws {
+    let config = Config(
+        version: "1.0.0-beta.1",
+        strict: false,
         files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
         renames: nil,
         hooks: nil

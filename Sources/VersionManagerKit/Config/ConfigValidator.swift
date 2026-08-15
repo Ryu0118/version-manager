@@ -7,10 +7,19 @@ package struct ConfigValidator {
         var errors: [ConfigValidatorError] = []
         errors += validateFiles(config.files)
         errors += validateRenames(config.renames)
-        errors += validateSourceOfTruth(config.sourceOfTruth, files: config.files)
+        errors += validateVersion(config.version, strict: config.strict)
         if !errors.isEmpty {
             throw ConfigValidationFailure(errors: errors)
         }
+    }
+
+    private func validateVersion(_ version: String, strict: Bool?) -> [ConfigValidatorError] {
+        do {
+            try VersionFormatValidator().validate(version, strict: strict ?? true)
+        } catch {
+            return [.invalidVersionField(underlying: error.localizedDescription)]
+        }
+        return []
     }
 }
 
@@ -20,8 +29,7 @@ package enum ConfigValidatorError: Error, LocalizedError, Equatable {
     case pathEscapesProjectRoot(ruleID: String, path: String)
     case duplicateRuleID(id: String)
     case missingVersionPlaceholder(ruleID: String, format: String)
-    case unknownSourceOfTruth(id: String)
-    case patternRequiredForCustomFormat
+    case invalidVersionField(underlying: String)
 
     package var errorDescription: String? {
         switch self {
@@ -35,10 +43,8 @@ package enum ConfigValidatorError: Error, LocalizedError, Equatable {
             "duplicate rule id \"\(id)\""
         case let .missingVersionPlaceholder(ruleID, format):
             "[\(ruleID)] rename format \"\(format)\" must contain {version}"
-        case let .unknownSourceOfTruth(id):
-            "source_of_truth \"\(id)\" does not match any rule id"
-        case .patternRequiredForCustomFormat:
-            "version.pattern is required when version.format is \"pattern\""
+        case let .invalidVersionField(underlying):
+            "config version field is invalid: \(underlying)"
         }
     }
 }
