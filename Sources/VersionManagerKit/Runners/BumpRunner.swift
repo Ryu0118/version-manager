@@ -1,4 +1,5 @@
 import FileManagerProtocol
+import Foundation
 import ProcessRunning
 
 package struct BumpRunner {
@@ -20,13 +21,27 @@ package struct BumpRunner {
     ) async throws -> BumpPlan {
         let config = try ConfigLoader(fileManager: fileManager).load(from: configPath)
         try ConfigValidator().validate(config)
-        try VersionFormatValidator().validate(newVersion, against: config.version)
+        try VersionFormatValidator().validate(newVersion, strict: config.strict ?? true)
 
         let access = FileSystemAccess(fileManager: fileManager)
         let planner = BumpPlanner(fileSystemAccess: access, fileManager: fileManager, processRunner: processRunner)
         var plan = try await planner.plan(config: config, projectRoot: projectRoot, newVersion: newVersion)
         plan.preHooks = config.hooks?.pre ?? []
         plan.postHooks = config.hooks?.post ?? []
+
+        let absoluteConfigPath = configPath.hasPrefix("/") ? configPath : projectRoot + "/" + configPath
+        if let configData = fileManager.contents(atPath: absoluteConfigPath),
+           let configContent = String(bytes: configData, encoding: .utf8),
+           let configReplacement = BumpPlanner.replacementPlan(
+               ruleID: "__appversion_config__",
+               path: absoluteConfigPath,
+               content: configContent,
+               pattern: #"version:\s*"(\d+\.\d+\.\d+)""#,
+               newVersion: newVersion
+           )
+        {
+            plan.replacements.append(configReplacement)
+        }
 
         try PlanValidator().validate(plan, config: config, newVersion: newVersion, force: force)
 

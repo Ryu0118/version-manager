@@ -25,29 +25,10 @@ package struct BumpPlanner {
             for path in matchedPaths {
                 guard let data = fileManager.contents(atPath: path),
                       let content = String(bytes: data, encoding: .utf8) else { continue }
-                guard let regex = try? Regex(rule.pattern) else { continue }
-
-                var matchSlices: [MatchSlice] = []
-                var result = content
-                // Replace in reverse order so an earlier length-changing replacement
-                // never invalidates the still-unprocessed ranges of later matches.
-                let matches = Array(content.matches(of: regex).reversed())
-
-                for match in matches {
-                    guard match.output.count > 1, let captureRange = match.output[1].range else { continue }
-                    let oldValue = String(content[captureRange])
-                    matchSlices.append(MatchSlice(range: captureRange, oldValue: oldValue))
-                    result.replaceSubrange(captureRange, with: newVersion)
-                }
-
-                if !matchSlices.isEmpty {
-                    replacements.append(FileReplacementPlan(
-                        ruleID: rule.id,
-                        path: path,
-                        matches: matchSlices.reversed(),
-                        originalContent: content,
-                        newContent: result
-                    ))
+                if let replacement = Self.replacementPlan(
+                    ruleID: rule.id, path: path, content: content, pattern: rule.pattern, newVersion: newVersion
+                ) {
+                    replacements.append(replacement)
                 }
             }
         }
@@ -73,5 +54,37 @@ package struct BumpPlanner {
         }
 
         return BumpPlan(replacements: replacements, renames: renames)
+    }
+
+    package static func replacementPlan(
+        ruleID: String,
+        path: String,
+        content: String,
+        pattern: String,
+        newVersion: String
+    ) -> FileReplacementPlan? {
+        guard let regex = try? Regex(pattern) else { return nil }
+
+        var matchSlices: [MatchSlice] = []
+        var result = content
+        // Replace in reverse order so an earlier length-changing replacement
+        // never invalidates the still-unprocessed ranges of later matches.
+        let matches = Array(content.matches(of: regex).reversed())
+
+        for match in matches {
+            guard match.output.count > 1, let captureRange = match.output[1].range else { continue }
+            let oldValue = String(content[captureRange])
+            matchSlices.append(MatchSlice(range: captureRange, oldValue: oldValue))
+            result.replaceSubrange(captureRange, with: newVersion)
+        }
+
+        guard !matchSlices.isEmpty else { return nil }
+        return FileReplacementPlan(
+            ruleID: ruleID,
+            path: path,
+            matches: matchSlices.reversed(),
+            originalContent: content,
+            newContent: result
+        )
     }
 }
