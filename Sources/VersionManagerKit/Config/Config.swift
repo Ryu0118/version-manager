@@ -1,27 +1,16 @@
 package struct Config: Decodable, Sendable, Equatable {
-    package var version: VersionFormat
-    package var sourceOfTruth: String?
+    package var version: String
+    package var strict: Bool?
     package var files: [FileRule]
     package var renames: [RenameRule]?
     package var hooks: Hooks?
 
     package enum CodingKeys: String, CodingKey {
         case version
-        case sourceOfTruth = "source_of_truth"
+        case strict
         case files
         case renames
         case hooks
-    }
-
-    package struct VersionFormat: Decodable, Sendable, Equatable {
-        package var format: Format
-        package var pattern: String?
-        package var strict: Bool?
-
-        package enum Format: String, Decodable, Sendable, Equatable {
-            case semver
-            case pattern
-        }
     }
 
     package struct FileRule: Decodable, Sendable, Equatable {

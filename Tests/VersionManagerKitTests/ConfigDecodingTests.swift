@@ -21,15 +21,14 @@ func occurrencesDecodesInteger() throws {
 @Test("minimal config decodes")
 func minimalConfigDecodes() throws {
     let yaml = """
-    version:
-      format: semver
+    version: "1.0.0"
     files:
       - id: version-swift
         path: Sources/MyToolCLI/Version.swift
         pattern: 'static let current = "(\\d+\\.\\d+\\.\\d+)"'
     """
     let config = try YAMLDecoder().decode(Config.self, from: yaml)
-    #expect(config.version.format == .semver)
+    #expect(config.version == "1.0.0")
     #expect(config.files.count == 1)
     #expect(config.files[0].id == "version-swift")
     #expect(config.files[0].occurrences == .all)
@@ -40,10 +39,8 @@ func minimalConfigDecodes() throws {
 @Test("full config decodes with renames and hooks")
 func fullConfigDecodes() throws {
     let yaml = """
-    version:
-      format: semver
-      strict: true
-    source_of_truth: xcodeproj
+    version: "1.18.0"
+    strict: true
     files:
       - id: xcodeproj
         path: "*.xcodeproj/project.pbxproj"
@@ -64,8 +61,8 @@ func fullConfigDecodes() throws {
           run: "./scripts/insert-changelog-entry.sh"
     """
     let config = try YAMLDecoder().decode(Config.self, from: yaml)
-    #expect(config.sourceOfTruth == "xcodeproj")
-    #expect(config.version.strict == true)
+    #expect(config.version == "1.18.0")
+    #expect(config.strict == true)
     #expect(config.renames?.count == 1)
     #expect(config.renames?[0].transform?.run.contains("tr") == true)
     #expect(config.hooks?.pre?.count == 1)
