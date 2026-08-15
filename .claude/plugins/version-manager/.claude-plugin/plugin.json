@@ -1,0 +1,10 @@
+{
+  "name": "version-manager",
+  "version": "0.1.0",
+  "description": "version-manager CLI usage guide and .appversion.yml authoring skills for AI agents and humans.",
+  "author": { "name": "Ryu0118" },
+  "homepage": "https://github.com/Ryu0118/version-manager",
+  "repository": "https://github.com/Ryu0118/version-manager",
+  "license": "MIT",
+  "keywords": ["versioning", "release", "cli", "agent"]
+}

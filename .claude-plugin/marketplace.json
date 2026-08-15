@@ -1,0 +1,11 @@
+{
+  "name": "version-manager",
+  "owner": { "name": "Ryu0118" },
+  "metadata": {
+    "description": "Official version-manager CLI skills for Claude Code",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    { "name": "version-manager", "source": "./.claude/plugins/version-manager", "category": "productivity" }
+  ]
+}

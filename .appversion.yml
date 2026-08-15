@@ -1,0 +1,27 @@
+version: "0.1.0"
+
+files:
+  - id: version-swift
+    path: Sources/VersionManagerCLI/Version.swift
+    pattern: 'static let current = "(\d+\.\d+\.\d+)"'
+    occurrences: 1
+
+  - id: marketplace-json
+    path: .claude-plugin/marketplace.json
+    pattern: '"version": "(\d+\.\d+\.\d+)"'
+    occurrences: 1
+
+  - id: claude-plugin-json
+    path: .claude/plugins/version-manager/.claude-plugin/plugin.json
+    pattern: '"version": "(\d+\.\d+\.\d+)"'
+    occurrences: 1
+
+  - id: codex-plugin-json
+    path: plugins/version-manager/.codex-plugin/plugin.json
+    pattern: '"version": "(\d+\.\d+\.\d+)"'
+    occurrences: 1
+
+  - id: apm-yml
+    path: apm.yml
+    pattern: 'version: (\d+\.\d+\.\d+)'
+    occurrences: 1

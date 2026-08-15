@@ -1,0 +1,12 @@
+name: version-manager
+version: 0.1.0
+description: version-manager CLI usage guide and .appversion.yml authoring skills for AI agents.
+author: Ryu0118
+license: MIT
+dependencies:
+  apm: []
+  mcp: []
+includes:
+  - skills/version-manager-config-guide/
+  - skills/version-manager-cli-guide/
+scripts: {}
