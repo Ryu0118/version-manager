@@ -3,7 +3,7 @@ import ArgumentParser
 package struct BumpCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
         commandName: "bump",
-        abstract: "Bump the version across all configured files",
+        abstract: "Bump the version across all configured files"
     )
 
     @Argument(help: "New version string")

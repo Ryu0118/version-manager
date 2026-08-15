@@ -3,7 +3,7 @@ import ArgumentParser
 package struct InitCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
         commandName: "init",
-        abstract: "Generate a .appversion.yml template",
+        abstract: "Generate a .appversion.yml template"
     )
 
     @Flag(help: "Overwrite an existing .appversion.yml")

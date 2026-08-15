@@ -18,19 +18,19 @@ let package = Package(
         .package(url: "https://github.com/tuist/FileSystem", from: "0.13.47"),
         .package(url: "https://github.com/Ryu0118/FileManagerProtocol", from: "0.1.0"),
         .package(url: "https://github.com/Ryu0118/ProcessRunning", from: "0.2.1"),
-        .package(url: "https://github.com/swiftlang/swift-subprocess", "0.2.1"..<"0.3.0"),
+        .package(url: "https://github.com/swiftlang/swift-subprocess", "0.2.1" ..< "0.3.0"),
     ],
     targets: [
         .executableTarget(
             name: "version-manager",
-            dependencies: ["VersionManagerCLI"],
+            dependencies: ["VersionManagerCLI"]
         ),
         .target(
             name: "VersionManagerCLI",
             dependencies: [
                 "VersionManagerKit",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ],
+            ]
         ),
         .target(
             name: "VersionManagerKit",
@@ -41,7 +41,7 @@ let package = Package(
                 .product(name: "Rainbow", package: "Rainbow"),
                 .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
                 .product(name: "ProcessRunning", package: "ProcessRunning"),
-            ],
+            ]
         ),
         .testTarget(
             name: "VersionManagerKitTests",
@@ -50,11 +50,11 @@ let package = Package(
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
             ],
-            exclude: ["Fixtures"],
+            exclude: ["Fixtures"]
         ),
         .testTarget(
             name: "VersionManagerCLITests",
-            dependencies: ["VersionManagerCLI"],
+            dependencies: ["VersionManagerCLI"]
         ),
     ]
 )

@@ -12,7 +12,7 @@ package struct VersionManagerCommand: AsyncParsableCommand {
             CurrentCommand.self,
             InitCommand.self,
             InstallSkillsCommand.self,
-        ],
+        ]
     )
 
     package init() {}

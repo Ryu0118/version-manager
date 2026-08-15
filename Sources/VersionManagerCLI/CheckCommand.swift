@@ -3,7 +3,7 @@ import ArgumentParser
 package struct CheckCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
         commandName: "check",
-        abstract: "Verify that project files are consistent with .appversion.yml",
+        abstract: "Verify that project files are consistent with .appversion.yml"
     )
 
     @Flag(help: "Output machine-readable JSON")

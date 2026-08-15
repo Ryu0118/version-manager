@@ -3,7 +3,7 @@ import ArgumentParser
 package struct CurrentCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
         commandName: "current",
-        abstract: "Print the current version",
+        abstract: "Print the current version"
     )
 
     @Flag(help: "Output machine-readable JSON")

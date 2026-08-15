@@ -9,7 +9,7 @@ package enum SkillAgentTarget: String, ExpressibleByArgument, CaseIterable {
 package struct InstallSkillsCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
         commandName: "install-skills",
-        abstract: "Install version-manager Agent Skills into a project",
+        abstract: "Install version-manager Agent Skills into a project"
     )
 
     @Option(help: "Which agent layout to install")
