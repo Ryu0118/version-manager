@@ -13,11 +13,13 @@ package struct PlanApplier {
 
         for replacement in plan.replacements {
             do {
-                try write(replacement.newContent, to: replacement.path)
+                try writeAtomically(replacement.newContent, to: replacement.path)
                 applied.append(replacement)
             } catch {
-                rollback(applied)
-                throw PlanApplierError.writeFailed(path: replacement.path, underlying: String(describing: error))
+                throw rollbackAndBuildError(
+                    applied,
+                    writeFailure: .writeFailed(path: replacement.path, underlying: String(describing: error))
+                )
             }
         }
 
@@ -25,23 +27,46 @@ package struct PlanApplier {
             do {
                 try fileManager.moveItem(atPath: rename.oldPath, toPath: rename.newPath)
             } catch {
-                rollback(applied)
-                throw PlanApplierError.writeFailed(path: rename.newPath, underlying: String(describing: error))
+                throw rollbackAndBuildError(
+                    applied,
+                    writeFailure: .writeFailed(path: rename.newPath, underlying: String(describing: error))
+                )
             }
         }
     }
 
-    private func write(_ content: String, to path: String) throws {
-        guard fileManager.createFile(atPath: path, contents: Data(content.utf8), attributes: nil) else {
+    private func writeAtomically(_ content: String, to path: String) throws {
+        let tempPath = path + ".tmp-\(UUID().uuidString)"
+        guard fileManager.createFile(atPath: tempPath, contents: Data(content.utf8), attributes: nil) else {
             throw PlanApplierError.writeFailed(path: path, underlying: "createFile returned false")
         }
+        if fileManager.fileExists(atPath: path) {
+            try fileManager.removeItem(atPath: path)
+        }
+        try fileManager.moveItem(atPath: tempPath, toPath: path)
     }
 
-    private func rollback(_ applied: [FileReplacementPlan]) {
-        for replacement in applied.reversed() {
-            let originalData = Data(replacement.originalContent.utf8)
-            _ = fileManager.createFile(atPath: replacement.path, contents: originalData, attributes: nil)
+    private func rollbackAndBuildError(
+        _ applied: [FileReplacementPlan],
+        writeFailure: PlanApplierError
+    ) -> PlanApplierError {
+        let unrecoveredPaths = rollback(applied)
+        guard unrecoveredPaths.isEmpty else {
+            return .rollbackFailed(unrecoveredPaths: unrecoveredPaths)
         }
+        return writeFailure
+    }
+
+    private func rollback(_ applied: [FileReplacementPlan]) -> [String] {
+        var unrecoveredPaths: [String] = []
+        for replacement in applied.reversed() {
+            do {
+                try writeAtomically(replacement.originalContent, to: replacement.path)
+            } catch {
+                unrecoveredPaths.append(replacement.path)
+            }
+        }
+        return unrecoveredPaths
     }
 }
 
