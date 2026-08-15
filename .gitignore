@@ -2,3 +2,4 @@
 .swiftpm/
 .nest/
 Sources/VersionManagerKit/Generated/GeneratedSkills.swift
+.superpowers/
