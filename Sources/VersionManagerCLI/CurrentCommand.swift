@@ -1,4 +1,7 @@
 import ArgumentParser
+import Foundation
+import ProcessRunning
+import VersionManagerKit
 
 package struct CurrentCommand: AsyncParsableCommand {
     package static let configuration = CommandConfiguration(
@@ -14,6 +17,11 @@ package struct CurrentCommand: AsyncParsableCommand {
     package init() {}
 
     package func run() async throws {
-        // implemented in Task 12
+        let runner = CurrentRunner(fileManager: FileManager.default, processRunner: ProcessRunner())
+        let version = try await runner.run(
+            configPath: globalOptions.config,
+            projectRoot: FileManager.default.currentDirectoryPath
+        )
+        print(version)
     }
 }

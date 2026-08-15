@@ -81,6 +81,19 @@ func checkReportsConsistent() async throws {
     }
 }
 
+@Test("current extracts the version from the source-of-truth rule")
+func currentExtractsVersion() async throws {
+    try await FileManager.default.runInTemporaryDirectory { directory in
+        try writeFixture(in: directory)
+        let runner = CurrentRunner(fileManager: FileManager.default, processRunner: MockProcessRunner())
+        let version = try await runner.run(
+            configPath: directory.appendingPathComponent(".appversion.yml").path,
+            projectRoot: directory.path
+        )
+        #expect(version == "1.0.0")
+    }
+}
+
 @Test("check reports inconsistent when a rule matches zero times")
 func checkReportsInconsistentOnZeroMatch() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
