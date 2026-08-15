@@ -142,3 +142,31 @@ func renameFormatWithPlaceholderPasses() throws {
     let validator = ConfigValidator()
     try validator.validate(config)
 }
+
+@Test("source_of_truth referencing an unknown rule id fails")
+func unknownSourceOfTruthFails() {
+    let config = Config(
+        version: .init(format: .semver, pattern: nil, strict: nil),
+        sourceOfTruth: "does-not-exist",
+        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
+        renames: nil,
+        hooks: nil
+    )
+    let validator = ConfigValidator()
+    #expect(throws: (any Error).self) {
+        try validator.validate(config)
+    }
+}
+
+@Test("source_of_truth referencing a known rule id passes")
+func knownSourceOfTruthPasses() throws {
+    let config = Config(
+        version: .init(format: .semver, pattern: nil, strict: nil),
+        sourceOfTruth: "f",
+        files: [.init(id: "f", path: "a.txt", pattern: "v(\\d+\\.\\d+\\.\\d+)", occurrences: .all)],
+        renames: nil,
+        hooks: nil
+    )
+    let validator = ConfigValidator()
+    try validator.validate(config)
+}

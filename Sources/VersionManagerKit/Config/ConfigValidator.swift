@@ -7,6 +7,7 @@ package struct ConfigValidator {
         var errors: [ConfigValidatorError] = []
         errors += validateFiles(config.files)
         errors += validateRenames(config.renames)
+        errors += validateSourceOfTruth(config.sourceOfTruth, files: config.files)
         if !errors.isEmpty {
             throw ConfigValidationFailure(errors: errors)
         }
