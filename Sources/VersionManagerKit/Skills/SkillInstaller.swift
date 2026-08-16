@@ -2,8 +2,13 @@ import FileManagerProtocol
 import Foundation
 
 package struct SkillInstallResult: Sendable, Equatable {
-    package let installed: [String]
+    package let installed: [InstalledSkill]
     package let skipped: [SkippedSkill]
+
+    package struct InstalledSkill: Sendable, Equatable {
+        package let name: String
+        package let paths: [String]
+    }
 
     package struct SkippedSkill: Sendable, Equatable {
         package let name: String
@@ -32,22 +37,22 @@ package struct SkillInstaller {
     package func install(
         _ assets: [SkillAsset],
         agent: SkillAgentTarget,
-        dir: String,
+        baseDir: String,
         force: Bool
     ) throws -> SkillInstallResult {
-        var installed: [String] = []
+        var installed: [SkillInstallResult.InstalledSkill] = []
         var skipped: [SkillInstallResult.SkippedSkill] = []
 
         let targets: [String] = switch agent {
-        case .claudeCode: [".claude/skills"]
-        case .codex: [".agents/skills"]
-        case .both: [".claude/skills", ".agents/skills"]
+        case .claudeCode: ["\(baseDir)/.claude/skills"]
+        case .agents: ["\(baseDir)/.agents/skills"]
+        case .both: ["\(baseDir)/.claude/skills", "\(baseDir)/.agents/skills"]
         }
 
         for asset in assets {
-            var wroteAny = false
+            var writtenPaths: [String] = []
             for target in targets {
-                let skillDir = "\(dir)/\(target)/\(asset.name)"
+                let skillDir = "\(target)/\(asset.name)"
                 let path = "\(skillDir)/SKILL.md"
                 if fileManager.fileExists(atPath: path), !force {
                     skipped.append(.init(name: asset.name, reason: "already exists at \(path)"))
@@ -57,10 +62,10 @@ package struct SkillInstaller {
                 guard fileManager.createFile(atPath: path, contents: Data(asset.content.utf8)) else {
                     throw SkillInstallerError.writeFailed(path: path)
                 }
-                wroteAny = true
+                writtenPaths.append(path)
             }
-            if wroteAny {
-                installed.append(asset.name)
+            if !writtenPaths.isEmpty {
+                installed.append(.init(name: asset.name, paths: writtenPaths))
             }
         }
 

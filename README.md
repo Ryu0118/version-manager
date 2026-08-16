@@ -172,7 +172,7 @@ version-manager bump <version> [--dry-run] [--json] [--skip-hooks] [--force] [--
 version-manager check [--json] [--config <path>] [--verbose]
 version-manager current [--json] [--config <path>] [--verbose]
 version-manager init [--force] [--config <path>] [--verbose]
-version-manager install-skills [--agent claude-code|codex|both] [--dir <path>] [--force] [--json]
+version-manager install-skills [--agent claude-code|agents|both] [--global | --dir <path>] [--force] [--json]
 ```
 
 | Command | What it does |
@@ -181,11 +181,12 @@ version-manager install-skills [--agent claude-code|codex|both] [--dir <path>] [
 | `check` | Verify the current repo state is internally consistent — every rule matches, every extracted version agrees with the config's `version` field. Non-zero exit on drift. Ideal as a CI gate before merging a release PR. |
 | `current` | Print the current version, read directly from the config's `version` field. |
 | `init` | Write a commented `.appversion.yml` template to get started. |
-| `install-skills` | Install version-manager's own Agent Skills (config authoring guide + CLI usage guide) into a target project, for Claude Code and/or Codex. |
+| `install-skills` | Install version-manager's own Agent Skills (config authoring guide + CLI usage guide) into a project (default) or, with `--global`, into `~/.claude/skills` and/or `~/.agents/skills`. Prints the full path of every file it writes. |
 
 `--config <path>` selects a config file other than `.appversion.yml` (default);
 `--verbose` turns on detailed logging. Both are available on every subcommand except
-`install-skills`.
+`install-skills`. `install-skills`' own `--dir <path>` (target project root, default `.`)
+and `--global` (install into `$HOME` instead) are mutually exclusive.
 
 `--dry-run` builds and validates the full change set — every regex match, every
 occurrence count, every rename — without writing anything, then prints the diff.
