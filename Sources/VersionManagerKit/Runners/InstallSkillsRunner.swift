@@ -1,4 +1,5 @@
 import FileManagerProtocol
+import Foundation
 
 package struct InstallSkillsRunner {
     private let fileManager: any FileManagerProtocol
@@ -7,7 +8,15 @@ package struct InstallSkillsRunner {
         self.fileManager = fileManager
     }
 
-    package func run(agent: SkillAgentTarget, dir: String, force: Bool) throws -> SkillInstallResult {
-        try SkillInstaller(fileManager: fileManager).install(GeneratedSkills.all, agent: agent, dir: dir, force: force)
+    package func run(agent: SkillAgentTarget, dir: String, global: Bool, force: Bool) throws -> SkillInstallResult {
+        let homeDir = ProcessInfo.processInfo.environment["HOME"]
+            ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let baseDir = global ? homeDir : dir
+        return try SkillInstaller(fileManager: fileManager).install(
+            GeneratedSkills.all,
+            agent: agent,
+            baseDir: baseDir,
+            force: force
+        )
     }
 }

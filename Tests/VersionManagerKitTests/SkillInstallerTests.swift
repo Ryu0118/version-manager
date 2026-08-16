@@ -8,20 +8,20 @@ func installsToClaudeSkillsDir() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         let assets = [SkillAsset(name: "test-skill", content: "# Test Skill")]
         let installer = SkillInstaller(fileManager: FileManager.default)
-        let result = try installer.install(assets, agent: .claudeCode, dir: directory.path, force: false)
-        #expect(result.installed == ["test-skill"])
+        let result = try installer.install(assets, agent: .claudeCode, baseDir: directory.path, force: false)
         let path = directory.appendingPathComponent(".claude/skills/test-skill/SKILL.md").path
+        #expect(result.installed == [.init(name: "test-skill", paths: [path])])
         let content = try String(contentsOfFile: path, encoding: .utf8)
         #expect(content == "# Test Skill")
     }
 }
 
-@Test("installs to .agents/skills for codex agent")
+@Test("installs to .agents/skills for agents target")
 func installsToAgentsSkillsDir() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         let assets = [SkillAsset(name: "test-skill", content: "# Test Skill")]
         let installer = SkillInstaller(fileManager: FileManager.default)
-        _ = try installer.install(assets, agent: .codex, dir: directory.path, force: false)
+        _ = try installer.install(assets, agent: .agents, baseDir: directory.path, force: false)
         let path = directory.appendingPathComponent(".agents/skills/test-skill/SKILL.md").path
         #expect(FileManager.default.fileExists(atPath: path))
     }
@@ -32,11 +32,11 @@ func installsToBothDirs() async throws {
     try await FileManager.default.runInTemporaryDirectory { directory in
         let assets = [SkillAsset(name: "test-skill", content: "# Test Skill")]
         let installer = SkillInstaller(fileManager: FileManager.default)
-        _ = try installer.install(assets, agent: .both, dir: directory.path, force: false)
+        _ = try installer.install(assets, agent: .both, baseDir: directory.path, force: false)
         let claudePath = directory.appendingPathComponent(".claude/skills/test-skill/SKILL.md").path
-        let codexPath = directory.appendingPathComponent(".agents/skills/test-skill/SKILL.md").path
+        let agentsPath = directory.appendingPathComponent(".agents/skills/test-skill/SKILL.md").path
         #expect(FileManager.default.fileExists(atPath: claudePath))
-        #expect(FileManager.default.fileExists(atPath: codexPath))
+        #expect(FileManager.default.fileExists(atPath: agentsPath))
     }
 }
 
@@ -50,7 +50,7 @@ func skipsExistingWithoutForce() async throws {
 
         let assets = [SkillAsset(name: "test-skill", content: "# New Content")]
         let installer = SkillInstaller(fileManager: FileManager.default)
-        let result = try installer.install(assets, agent: .claudeCode, dir: directory.path, force: false)
+        let result = try installer.install(assets, agent: .claudeCode, baseDir: directory.path, force: false)
         #expect(result.installed.isEmpty)
         #expect(result.skipped.count == 1)
         let content = try String(contentsOfFile: path, encoding: .utf8)
@@ -68,8 +68,8 @@ func overwritesSkillWithForce() async throws {
 
         let assets = [SkillAsset(name: "test-skill", content: "# New Content")]
         let installer = SkillInstaller(fileManager: FileManager.default)
-        let result = try installer.install(assets, agent: .claudeCode, dir: directory.path, force: true)
-        #expect(result.installed == ["test-skill"])
+        let result = try installer.install(assets, agent: .claudeCode, baseDir: directory.path, force: true)
+        #expect(result.installed == [.init(name: "test-skill", paths: [path])])
         let content = try String(contentsOfFile: path, encoding: .utf8)
         #expect(content == "# New Content")
     }
