@@ -54,6 +54,9 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
 
+      - name: Generate skills
+        run: make generate-skills
+
       - name: Build Universal Binary
         run: xcrun swift build -c release --arch arm64 --arch x86_64
 
@@ -123,6 +126,9 @@ jobs:
             Sources/VersionManagerCLI/Version.swift
         env:
           VERSION: ${{ inputs.version }}
+
+      - name: Generate skills
+        run: make generate-skills
 
       - name: Build Linux Binary
         run: swift build -c release --static-swift-stdlib
