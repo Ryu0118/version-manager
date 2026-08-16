@@ -8,7 +8,7 @@ rules:
   - Sources/VersionManagerCLI/InstallSkillsCommand.swift
   doc: README.md
   message: README Commands section is out of sync with CLI command definitions
-  checksum: eeb69e1c04487f07f35c5d79549e8e3bf212db65e8f8da2afb7058b86d5f3489
+  checksum: 72bd72f14ebf04789571105ba5388ec16a1b009a9cf6fc334acb3f3002841891
 - name: claude-config-schema
   sources:
   - Sources/VersionManagerKit/Config/Config.swift
