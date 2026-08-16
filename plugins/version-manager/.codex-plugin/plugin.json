@@ -1,6 +1,6 @@
 {
   "name": "version-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "version-manager CLI usage guide and .appversion.yml authoring skills for AI agents and humans.",
   "author": { "name": "Ryu0118" },
   "homepage": "https://github.com/Ryu0118/version-manager",
