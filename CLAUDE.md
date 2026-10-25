@@ -114,3 +114,9 @@ expansion, if `tuist/FileSystem`'s `Glob` cannot be mocked — see
   hook blocks the commit. The hook triggers on **any** staged `.swift` file, not
   just docsync-tracked ones, so this is easy to hit unexpectedly — if a commit gets
   blocked on an unrelated `.swift` change, that's why.
+
+## When documentation and code disagree
+
+When documentation and the existing code disagree, follow the conventions used in
+the existing code, and in your final reply list every inconsistency you found
+between the documentation and the code.
